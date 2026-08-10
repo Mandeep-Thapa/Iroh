@@ -3,7 +3,7 @@ import { Cpu, ChevronDown, Copy, RefreshCcw, Check, Sparkles, Globe, Terminal, B
 import { invoke } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { LLMSettings, ReasoningLog, TaskStep, Message, Skill, Rule } from "../types";
+import { LLMSettings, ReasoningLog, TaskStep, Message, MessageRole, Skill, Rule } from "../types";
 
 const getModelCapabilities = (modelName: string | undefined | null) => {
   if (!modelName) return null;
