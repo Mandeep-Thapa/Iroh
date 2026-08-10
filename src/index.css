@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Space+Grotesk:wght@500;700;900&display=swap');
+@plugin "@tailwindcss/typography";
+
+:root {
+  --bg-color: #f5f0e8;
+  --text-color: #1a1a1a;
+  --border-color: #1a1a1a;
+  --shadow-color: #1a1a1a;
+  --surface-color: #ffffff;
+  --surface-alt: #ebe6de;
+  --text-muted: #777777;
+  --accent-text: #1a1a1a;
+  --code-bg: #e5e0d8;
+  --code-text: #1a1a1a;
+  --scrollbar-thumb: #1a1a1a;
+  --scrollbar-hover: #333333;
+}
+
+.dark {
+  --bg-color: #111111;
+  --text-color: #e8e3db;
+  --border-color: #555555;
+  --shadow-color: #444444;
+  --surface-color: #1c1c1c;
+  --surface-alt: #2c2c2c;
+  --text-muted: #8a8a8a;
+  --accent-text: #111111;
+  --code-bg: #1e1e1e;
+  --code-text: #d4d0c8;
+  --scrollbar-thumb: #555555;
+  --scrollbar-hover: #777777;
+}
+
+@theme {
+  --color-cream: var(--bg-color);
+  --color-primary: var(--text-color);
+  --color-border: var(--border-color);
+  --color-surface: var(--surface-color);
+  --color-surfaceAlt: var(--surface-alt);
+  --color-textMuted: var(--text-muted);
+  --color-accentText: var(--accent-text);
+  --color-brutalRed: #e63b2e;
+  --color-brutalBlue: #2d7ff9;
+  --color-brutalYellow: #ffcc00;
+
+  --shadow-brutal: 6px 6px 0px 0px var(--shadow-color);
+  --shadow-brutal-sm: 4px 4px 0px 0px var(--shadow-color);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 0;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* Prose / Markdown overrides for both themes */
+.prose pre {
+  background-color: var(--code-bg) !important;
+  color: var(--code-text) !important;
+  border: 2px solid var(--border-color) !important;
+  box-shadow: 4px 4px 0px 0px var(--shadow-color) !important;
+  padding: 1rem !important;
+}
+
+.prose code {
+  color: var(--code-text) !important;
+  background-color: var(--surface-alt) !important;
+  padding: 0.15em 0.4em !important;
+  font-weight: 600 !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.prose pre code {
+  background-color: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: var(--text-color) !important;
+}
+
+.prose p, .prose li, .prose td, .prose th, .prose blockquote {
+  color: var(--text-color) !important;
+}
+
+.prose a {
+  color: #2d7ff9 !important;
+  text-decoration: underline !important;
+}
+
+.prose strong {
+  color: var(--text-color) !important;
+}
+
+.prose hr {
+  border-color: var(--border-color) !important;
+}
+
+.prose blockquote {
+  border-left-color: var(--border-color) !important;
+}
+
+/* Select/option fix for dark mode */
+select option {
+  background-color: var(--surface-color);
+  color: var(--text-color);
+}
