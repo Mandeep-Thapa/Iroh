@@ -15,9 +15,9 @@ export default {
         surfaceAlt: 'var(--surface-alt)',
         textMuted: 'var(--text-muted)',
         accentText: 'var(--accent-text)',
-        brutalRed: '#e63b2e',
-        brutalBlue: '#2d7ff9',
-        brutalYellow: '#ffcc00',
+        brutalRed: 'var(--accent-red)',
+        brutalBlue: 'var(--accent-blue)',
+        brutalYellow: 'var(--accent-yellow)',
       },
       boxShadow: {
         'brutal': '6px 6px 0px 0px var(--shadow-color)',

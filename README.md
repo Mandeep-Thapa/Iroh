@@ -1,167 +1,226 @@
-# 🛡️ AI Sandbox Desktop
+# Iroh
 
-<div align="center">
+Iroh is a calm, local-first Windows coding assistant built with Tauri, Rust, React, and TypeScript. It can use local models through Ollama, experimental layer-streamed models through AirLLM, or explicitly enabled cloud providers.
 
-![Tauri](https://img.shields.io/badge/Tauri_v2-24C8D8?style=for-the-badge&logo=tauri&logoColor=white)
-![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![TypeScript](https://img.shields.io/badge/TypeScript_5-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Rust](https://img.shields.io/badge/Rust_1.80+-DEA584?style=for-the-badge&logo=rust&logoColor=black)
-![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS_v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-black?style=for-the-badge&logo=ollama&logoColor=white)
+The app is local-first. File writes, command execution, web access, and persistent memory are disabled in each chat until you turn on the corresponding toolbar permission.
 
-**An autonomous, sandboxed AI desktop environment for safe agentic code execution, true browser automation, multimodal vision, and local RAG.**
+## Security and cost guarantees
 
-[📥 Download Desktop App](#-download--installation) • [✨ Key Features](#-key-features) • [🏗️ Architecture](#️-architecture) • [🚀 Quickstart](#-quickstart--local-development) • [📖 Tool Reference](#-built-in-agentic-tools)
+- Cloud API use is off by default. Opening Settings and checking models never sends an OpenAI or Anthropic request.
+- Saving an API key does not make a paid model request. A cloud request can occur only after you enable the cloud API switch, select a cloud provider and model, and send a prompt.
+- API keys and tokens are handled by the Rust backend and protected with Windows DPAPI. They are never returned to the webview or written to the ordinary settings JSON.
+- OpenAI requests use the Responses API with storage disabled. See the official [OpenAI authentication guidance](https://developers.openai.com/api/reference/overview#authentication).
+- Commands run through a dedicated non-administrator Windows account and workspace checks. This is defense in depth, not a virtual machine or a complete security boundary. Do not run untrusted models or commands with access to valuable data.
+- Workspace resets move recoverable content into the workspace recovery directory; they do not silently erase it.
+- Telegram accepts only the configured chat ID, sanitizes filenames, applies size limits, and keeps transfers inside the workspace.
 
-</div>
+## What works
 
----
+- Ollama chat with local model detection.
+- OpenAI Responses API and Anthropic Messages API through backend-only credentials.
+- AirLLM local server controls and OpenAI-compatible local routing.
+- Explicit read, write, command, browser, web-search, Telegram, and memory tools.
+- Persistent Chromium sessions with public-network URL restrictions.
+- Text, image, and PDF reading with bounded file sizes.
+- Cited workspace retrieval with a zero-download lexical index or optional local Ollama embeddings.
+- Workspace snapshots, rollback, chat history, global rules, and editable skills.
+- RAM and NVIDIA VRAM visibility.
+- Optional sanitized local telemetry. Raw prompts, paths, commands, and keys are not logged.
 
-## 🌟 Overview
+## Requirements
 
-**AI Sandbox Desktop** is a high-performance, security-focused agentic AI desktop application built with **Tauri v2**, **Rust**, and **React 19**. It allows local and cloud LLMs (Ollama, OpenAI, Anthropic) to execute complex, multi-step workflows—such as writing files, executing PowerShell scripts, browsing the live web, analyzing images, and performing semantic document search—inside a strictly isolated and sandboxed Windows execution boundary.
+Windows 10 or 11 is required for the restricted worker account and DPAPI secret store.
 
----
+For development:
 
-## ✨ Key Features
+- Node.js 20 or newer
+- Rust stable with the MSVC target
+- Visual Studio C++ Build Tools
+- Microsoft Edge WebView2
+- Administrator permission when initially creating the restricted Windows worker account
+- Ollama, recommended for local inference
+- Python 3.10-3.12 only if you want to experiment with AirLLM
 
-### 🛡️ Dual-Privilege Windows Sandbox
-- **Process Isolation**: Executes shell and script commands under a dedicated restricted Windows worker account (`AI_Worker`) using `CreateProcessWithLogonW`.
-- **Workspace Boundary Enforcement**: Prevents accidental or malicious modification outside the configured project workspaces.
-- **Terminal Bridge**: Real-time terminal output streaming with colorized logs and status indicators.
+## Quick start
 
-### 🧠 Multi-Provider AI Engine
-- **Local LLM Support (Ollama)**: Zero-latency, offline execution with models like `Qwen 2.5`, `Llama 3.3`, `Gemma 2`, `DeepSeek R1`, and more.
-- **Cloud LLM Support**: Native streaming integration for **OpenAI** (GPT-4o, o3-mini) and **Anthropic** (Claude 3.5 / 3.7 Sonnet).
-- **Auto Context Management**: Dynamic context compression and token monitoring with capability badges (Vision, Tools, Thinking, Context Window).
+Install dependencies and run the desktop app:
 
-### 🌐 True Browser Automation
-- Embedded headless Chromium via Chrome DevTools Protocol (`CDP`).
-- Real-time webpage navigation, DOM text extraction, UI element clicking, typing, and full-resolution screenshot capture directly returned into the AI's vision stream.
-
-### 📄 Local Vector RAG (Retrieval-Augmented Generation)
-- Instant semantic document querying and paragraph extraction for PDFs, source code, and large markdown files without sending document contents to external servers.
-
-### 👁️ Multimodal Vision Pipeline
-- Seamless image reading (`.png`, `.jpg`, `.webp`, `.svg`) with base64 transcoding and injection into multimodal LLM context windows.
-
-### 📲 Remote Telegram Control & File Delivery
-- Built-in Telegram Bot polling system allowing bidirectional chat, remote prompt execution, and direct dispatch of generated PDFs, slides, and files straight to your phone.
-
-### ⏪ Time-Travel Snapshots & Memory (The Brain)
-- **Automatic Pre-Modification Backups**: Creates differential snapshots before file writes so you can undo any AI action with a single click.
-- **Persistent Knowledge Graph**: Persistent long-term memory (`<remember>`) stored directly in `.gemini/brain` or workspace storage.
-- **Live Telemetry & Resource Gauge**: Real-time monitoring of system RAM, GPU VRAM, and agent reasoning traces.
-
----
-
-## 🏗️ Architecture
-
-```mermaid
-graph TD
-    User([User / Telegram Bot]) <--> UI[React 19 + Tailwind CSS Frontend]
-    UI <--> IPC[Tauri v2 IPC Bridge]
-    
-    subgraph Rust Core [Tauri Rust Backend]
-        IPC --> Router[Command Router]
-        Router --> Sandbox[Windows Sandbox Enforcer]
-        Router --> Browser[Headless Chrome Engine CDP]
-        Router --> RAG[TF-IDF Document Search Engine]
-        Router --> Telegram[Telegram Polling & Multipart Sender]
-        Router --> Snapshot[Differential Snapshot Manager]
-        Router --> Telemetry[System RAM / VRAM Monitor]
-    end
-    
-    subgraph AI Providers
-        UI <--> Ollama[Local Ollama API]
-        UI <--> OpenAI[OpenAI API]
-        UI <--> Anthropic[Anthropic Claude API]
-    end
-    
-    Sandbox --> WorkerProc[Restricted AI_Worker Process]
-```
-
----
-
-## 📥 Download & Installation
-
-### Option 1: Pre-Built Desktop Installers
-Download the latest Windows installer (`.msi` or setup `.exe`) from the [Releases](https://github.com/Mandeep-Thapa/ai-sandbox-app/releases) tab.
-
-1. Download `ai-sandbox-app_0.1.0_x64_en-US.msi` or `setup.exe`.
-2. Run the installer and follow the on-screen setup prompts.
-3. Launch **AI Sandbox** from your Start Menu or Desktop shortcut.
-
-### Option 2: Build from Source
-Ensure you have the prerequisites installed:
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [Rust](https://www.rust-lang.org/tools/install) (1.80+)
-- [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (for Windows MSVC)
-- [Ollama](https://ollama.com/) (optional, for local LLMs)
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Mandeep-Thapa/ai-sandbox-app.git
-cd ai-sandbox-app
-
-# 2. Install frontend dependencies
-npm install
-
-# 3. Build production bundle and installer
-npm run tauri build
-```
-The compiled installer will be located in:
-`src-tauri/target/release/bundle/msi/` and `src-tauri/target/release/bundle/nsis/`
-
----
-
-## 🚀 Quickstart / Local Development
-
-Run the live development environment with hot-reloading:
-
-```bash
-# Start Vite + Tauri Dev Server
+~~~powershell
+npm ci
 npm run tauri dev
-```
+~~~
 
----
+In Settings:
 
-## 📖 Built-in Agentic Tools
+1. Choose a workspace directory. Do not choose a drive root, your whole user profile, or the Windows directory.
+2. Keep the worker name as AI_Worker or use a name beginning with AI_Worker_.
+3. Enter a strong worker password and initialize the workspace. The password is encrypted and the field clears after saving.
+4. For a laptop with 4-8 GB total RAM, start with Ollama and a small quantized 1B-3B model.
+5. Keep command, write, and web permissions off until a task needs them.
 
-The model interacts with the environment through high-precision XML tags:
+Production build:
 
-| Tool Tag | Description | Example |
-| :--- | :--- | :--- |
-| `<execute_command>` | Runs a sandboxed PowerShell command in the workspace | `<execute_command>npm run build</execute_command>` |
-| `<write_file>` | Writes or overwrites a file inside the workspace | `<write_file path="src/index.ts">console.log('hi')</write_file>` |
-| `<read_file>` | Reads the complete contents of a text or code file | `<read_file path="src/index.ts" />` |
-| `<list_dir>` | Lists files and directories within a given workspace folder | `<list_dir path="src" />` |
-| `<browse_web>` | Automates Chromium navigation, scraping, and screenshots | `<browse_web action="screenshot_base64" url="https://google.com" />` |
-| `<search_document>`| Local vector/RAG search across large PDF or text documents | `<search_document path="docs/manual.pdf" query="API endpoints" />` |
-| `<read_image>` | Encodes an image to Base64 and injects into vision context | `<read_image path="screenshot.png" />` |
-| `<send_file>` | Sends a generated file to the user via Telegram | `<send_file path="report.pdf" />` |
-| `<remember>` | Saves crucial context into the persistent Brain memory | `<remember>User prefers TypeScript with strict mode</remember>` |
-| `<search_web>` | Searches DuckDuckGo for live web documentation and news | `<search_web query="Tauri v2 migration guide" />` |
+~~~powershell
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml --locked
+npm run tauri build
+~~~
 
----
+Installers are written under src-tauri/target/release/bundle.
 
-## ⚙️ Configuration & Security
+## Provider setup
 
-1. **Workspace Boundary**: Set your root project directory in the UI settings or top navigation bar. All file operations outside this path are blocked by default.
-2. **Restricted Windows User**: Configure the `AI_Worker` credentials in the Sandbox Settings tab to run subprocesses with low Windows privileges.
-3. **Telegram Setup**: Provide your Telegram Bot Token in Settings -> Telegram. Once you message your bot `/start`, the desktop app automatically binds to your chat ID.
+### Ollama
 
----
+Ollama is the recommended default for modest laptops. Install a small quantized model using Ollama, start the Ollama service, then use Detect in Settings. The local endpoint defaults to http://127.0.0.1:11434 and is restricted to loopback addresses.
 
-## 🛠️ Tech Stack
+### OpenAI
 
-- **Frontend**: React 19, TypeScript, Tailwind CSS v4, Lucide Icons, React Markdown, Remark GFM
-- **Desktop Runtime**: Tauri v2
-- **Backend / Core Engine**: Rust, Win32 API (`windows-rs`), `headless_chrome`, `pdf-extract`, `ureq`, `base64`, `sysinfo`
-- **Build Tooling**: Vite 7, Cargo
+The key may come from the OPENAI_API_KEY environment variable, a development-only .env.local file, or the encrypted in-app secret store. The app never displays a stored key.
 
----
+To prevent accidental charges, Cloud API requests stays disabled until you explicitly enable it. Enter an exact model identifier; the app does not make an automatic model-list request.
 
-## 📄 License
+### Anthropic
 
-This project is licensed under the [MIT License](LICENSE).
+Save the key in Encrypted Secrets, enter the exact model identifier, and explicitly enable cloud requests. Like OpenAI, requests can consume paid credits.
+
+## AirLLM lab
+
+[AirLLM](https://github.com/lyogavin/airllm) loads model layers sequentially to reduce GPU-memory pressure. Its headline low-memory examples refer primarily to VRAM. They do not mean that a very large model will be pleasant or even practical on a laptop with only 4-8 GB of total system RAM.
+
+Expect:
+
+- very large downloads and cache directories;
+- model preprocessing or splitting;
+- heavy disk I/O;
+- long startup and generation times;
+- hardware-specific PyTorch installation;
+- compatibility differences between models and AirLLM versions.
+
+Install AirLLM only if you want to experiment:
+
+~~~powershell
+py -3.11 -m venv .venv-airllm
+.venv-airllm\Scripts\Activate.ps1
+# Install the PyTorch build appropriate for your CPU or GPU first.
+pip install -r requirements-airllm.txt
+~~~
+
+Then select AirLLM in Settings, set the virtual environment Python path, choose a Hugging Face model ID, select compression, and use Check locally before Start.
+
+The app never installs packages or downloads a model automatically. Starting a model can trigger a large Hugging Face download. A Hugging Face token is optional for public models and can be stored through Encrypted Secrets.
+
+For most 4-8 GB laptops, a small quantized Ollama model is faster, simpler, and more reliable than streaming a very large AirLLM model.
+
+## Tool permissions
+
+Chat toolbar permissions are authoritative:
+
+- Read-only workspace tools are available after workspace initialization.
+- Write enables file changes and persistent memory.
+- Terminal enables only validated structured execute_command requests. Code fences are never executed.
+- Web enables search and browser actions.
+- Thinking controls display/prompt behavior only.
+
+The agent executes at most five tool iterations per user message. Tool output, web content, filenames, documents, workspace trees, global rules, and skill text are treated as untrusted data rather than higher-priority instructions.
+
+## Workspace behavior
+
+All file paths are canonicalized and checked against the configured primary workspace. Dangerous workspace roots are rejected. New files must have an existing in-workspace parent.
+
+The restricted worker account receives modify permission only on the initialized workspace. Existing ACL inheritance is preserved. Iroh does not claim to contain kernel exploits, network access by child processes, or every Windows escape route.
+
+Snapshots store a bounded manifest and copies of existing files. Rollback restores backed-up files but preserves files created later. Reset moves the current workspace contents to:
+
+~~~text
+.antigravity/recovery/reset_TIMESTAMP
+~~~
+The hidden `.antigravity` directory name is retained for compatibility with workspaces created before the Iroh rename.
+
+
+## Telegram
+
+Create a bot with BotFather, save its token under Encrypted Secrets, enter the one allowed numeric chat ID, and enable Telegram. Messages from every other chat are ignored. File uploads and downloads remain workspace-bound.
+
+Telegram-originated prompts are read-only, but they can run validated workspace read tools such as directory listing, PDF search, and file reading. If a local model merely promises to inspect something without requesting a tool, Iroh corrects it once; an empty Ollama response above 4k context is retried locally at 4k and the safer context is saved.
+
+Do not expose the bot token, and do not authorize a group chat unless every member should be able to control the agent.
+
+## Project layout
+
+~~~text
+src/                         React and TypeScript UI
+src-tauri/src/               Rust security, provider, and tool backend
+scripts/airllm_server.py     Local AirLLM compatibility server
+requirements-airllm.txt      Optional AirLLM Python dependencies
+.github/workflows/           Release verification and packaging
+~~~
+
+Provider calls flow from the React UI through Tauri IPC to the Rust backend. Secrets and outbound cloud authorization stay in Rust. Local-provider endpoints accept loopback addresses only.
+
+## Verification
+
+The repository provides these offline-safe checks:
+
+~~~powershell
+npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo test --manifest-path src-tauri/Cargo.toml --locked
+python -m py_compile scripts/airllm_server.py
+~~~
+
+These checks do not send prompts or call a paid AI API. AirLLM environment checks inspect local Python modules only.
+
+## Known limitations
+
+- Windows is the supported platform.
+- The worker account is not equivalent to a VM, container, or AppContainer.
+- Provider generation is currently non-streaming.
+- Stopping the UI prevents further tool iterations but may not cancel a provider HTTP request already in flight.
+- Browser automation needs an installed compatible Chromium-based browser.
+- AirLLM viability depends heavily on the exact model, disk, Python, PyTorch, CPU, GPU, and driver combination.
+- Semantic retrieval requires a separately installed local Ollama embedding model and an index rebuild.
+
+## Model guidance and local benchmarks
+
+Settings includes a curated laptop-sized Ollama catalog and a hardware-aware context recommendation. The catalog currently covers Qwen 3 0.6B/4B, Gemma 3 1B/4B, and Llama 3.2 1B/3B using their published Ollama download sizes and advertised context windows. Installed models are detected locally; Iroh never pulls a model automatically.
+
+The benchmark button sends one small prompt only to the selected local Ollama or AirLLM endpoint. Cloud providers are deliberately blocked from the benchmark path. Context suggestions are conservative because a model's advertised maximum is not a promise that the laptop can run that window comfortably.
+
+## Approval, knowledge, and portability
+
+- Read-only workspace tools may run automatically after initialization.
+- Every write, command, web/browser, Telegram delivery, and MCP call requires an in-app approval. File writes show a bounded before/after preview first.
+- ?Allow this tool for session? lasts only until the app closes. Telegram-originated sessions are always read-only.
+- The bounded local activity ledger records action type and outcome, not prompts, secrets, commands, queries, or file contents.
+- Workspace knowledge results cite relative paths and line ranges.
+- MCP profiles accept loopback HTTP endpoints only. A server must be inspected, its tools discovered, and the profile enabled before the model can request a tool.
+- Task recipes are editable prompt starters.
+- Portable JSON export includes settings and chats but excludes encrypted secrets and worker passwords.
+
+## Signed updater setup
+
+Development builds do not contact an update server automatically. The Settings button performs a manual check and reports that updates are unavailable when the build has no signed release configuration.
+
+Before publishing the first tag, generate an encrypted Tauri release key in a secure location outside this repository:
+
+~~~powershell
+npm run tauri -- signer generate -p "CHOOSE-A-STRONG-PASSWORD" -w "C:\secure\iroh-release.key"
+~~~
+
+Back up the private key and password securely. Never commit them. Add these GitHub repository secrets:
+
+- **TAURI_SIGNING_PRIVATE_KEY**: the complete private key content
+- **TAURI_SIGNING_PRIVATE_KEY_PASSWORD**: its password
+- **TAURI_UPDATER_PUBLIC_KEY**: the complete generated public key content
+
+A version tag matching **v*** then builds Windows installers, creates signed updater artifacts, and publishes **latest.json** at the verified [Iroh repository](https://github.com/Mandeep-Thapa/Iroh). Installed packages verify signatures before installation.
+
+
+## Release workflow
+
+Tagged releases run npm ci, the frontend build, Rust tests, and Tauri packaging on Windows. No API key is required for builds or tests.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

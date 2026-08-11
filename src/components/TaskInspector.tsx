@@ -2,6 +2,7 @@ import { Activity, CheckCircle2, Circle, PlayCircle, ShieldAlert, XCircle, Rotat
 import { ReasoningLog, LLMSettings, SystemStats } from "../types";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { formatTokens, recommendContext } from "../modelGuidance";
 
 interface TaskInspectorProps {
   workspace: string;
@@ -63,6 +64,7 @@ export default function TaskInspector({
   const handleRollback = async () => {
     if (!latestSnapshot || !workspace) return;
     setIsRollingBack(true);
+    if (!window.confirm("Restore the latest snapshot? Backed-up files will be replaced, while newer files are preserved.")) return;
     try {
       await invoke("rollback_snapshot", { workspace, snapshotId: latestSnapshot });
       alert("Successfully rolled back to snapshot: " + latestSnapshot);
@@ -114,7 +116,7 @@ export default function TaskInspector({
           </button>
 
           <button 
-            onClick={onResetWorkspace}
+            onClick={() => { if (window.confirm("Reset this workspace? Current contents will be moved to .antigravity/recovery so they can be recovered.")) onResetWorkspace(); }}
             disabled={!isInitialized || isExecuting}
             className="w-full bg-surfaceAlt text-primary border-[2px] border-border px-3 py-2.5 font-display font-black text-[10px] uppercase tracking-widest hover:bg-brutalRed hover:text-cream transition-colors disabled:opacity-50"
           >
@@ -195,6 +197,31 @@ export default function TaskInspector({
               />
             );
           })()}
+
+          {(() => {
+            const suggestion = recommendContext({
+              provider: llmSettings.provider,
+              systemStats,
+            });
+            const isSelected = (llmSettings.contextLength || 32768) === suggestion.tokens;
+            return (
+              <div className="bg-brutalYellow/25 border-[2px] border-border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">Suggested: {formatTokens(suggestion.tokens)}</span>
+                  {!isSelected && (
+                    <button
+                      className="bg-primary text-cream border-[2px] border-border px-2 py-1 text-[9px] font-black uppercase hover:bg-brutalBlue"
+                      onClick={() => setLlmSettings({ ...llmSettings, contextLength: suggestion.tokens })}
+                    >
+                      Use
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] font-bold text-textMuted leading-relaxed">{suggestion.explanation}</p>
+              </div>
+            );
+          })()}
+
 
           <h3 className="text-[10px] font-display font-black uppercase tracking-widest text-textMuted pt-2">System Stats</h3>
           

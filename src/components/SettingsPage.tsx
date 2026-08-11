@@ -1,40 +1,122 @@
-import { useState, useEffect, useCallback } from "react";
-import { Settings, RefreshCw, Cpu, ShieldCheck, Eye, EyeOff, RotateCcw, Sparkles, BookOpen, Plus, Trash2, Pencil, X, Check } from "lucide-react";
-import { LLMSettings, LLMProvider, Skill, Rule } from "../types";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  BookOpen,
+  Check,
+  Cpu,
+  KeyRound,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  AirLlmStatus,
+  LLMProvider,
+  LLMSettings,
+  Rule,
+  SecretStatus,
+  Skill,
+} from "../types";
+import type { AccessibilitySettings, McpServerProfile, TaskRecipe } from "../types";
+import AccessibilityPanel from "./AccessibilityPanel";
+import ActivityLedger from "./ActivityLedger";
+import KnowledgePanel from "./KnowledgePanel";
+import McpPanel from "./McpPanel";
+import ModelAdvisorPanel from "./ModelAdvisorPanel";
+import PortableDataPanel from "./PortableDataPanel";
+import RecipesPanel from "./RecipesPanel";
+import UpdaterPanel from "./UpdaterPanel";
 
 interface SettingsPageProps {
-  workspace: string; setWorkspace: (ws: string) => void;
-  username: string; setUsername: (un: string) => void;
-  password: string; setPassword: (pw: string) => void;
-  userAlreadyExists: boolean; setUserAlreadyExists: (exists: boolean) => void;
-  llmSettings: LLMSettings; setLlmSettings: React.Dispatch<React.SetStateAction<LLMSettings>>;
-  isInitialized: boolean; setIsInitialized: (init: boolean) => void;
-  onModelsDetected: (models: string[]) => void; onReinitSandbox: () => void;
-  skills: Skill[]; onSkillsChange: (skills: Skill[]) => void;
-  rules: Rule[]; onRulesChange: (rules: Rule[]) => void;
+  workspace: string;
+  setWorkspace: (value: string) => void;
+  username: string;
+  setUsername: (value: string) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  userAlreadyExists: boolean;
+  setUserAlreadyExists: (value: boolean) => void;
+  llmSettings: LLMSettings;
+  setLlmSettings: React.Dispatch<React.SetStateAction<LLMSettings>>;
+  isInitialized: boolean;
+  setIsInitialized: (value: boolean) => void;
+  onModelsDetected: (models: string[]) => void;
+  onReinitSandbox: () => Promise<void>;
+  skills: Skill[];
+  onSkillsChange: (skills: Skill[]) => void;
+  rules: Rule[];
+  onRulesChange: (rules: Rule[]) => void;
   ollamaReady: boolean;
+  secretStatus: SecretStatus;
+  onSecretStatusChange: () => Promise<void>;
+  recipes: TaskRecipe[];
+  onRecipesChange: (recipes: TaskRecipe[]) => void;
+  mcpServers: McpServerProfile[];
+  onMcpServersChange: (servers: McpServerProfile[]) => void;
+  accessibility: AccessibilitySettings;
+  onAccessibilityChange: (settings: AccessibilitySettings) => void;
+}
+
+const fieldClass =
+  "w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue rounded-none placeholder:text-textMuted";
+const labelClass =
+  "block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2";
+const buttonClass =
+  "inline-flex items-center justify-center gap-2 bg-primary text-cream px-4 py-2.5 border-[2px] border-border font-display font-black uppercase text-xs tracking-widest shadow-brutal-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-brutalBlue transition-colors disabled:opacity-40";
+const panelClass = "bg-surface border-[2px] border-border p-6 shadow-brutal space-y-6";
+
+function statusLabel(configured: boolean) {
+  return configured ? "Configured securely" : "Not configured";
 }
 
 export default function SettingsPage({
-  workspace, setWorkspace, username, setUsername, password, setPassword,
-  userAlreadyExists, setUserAlreadyExists, llmSettings, setLlmSettings,
-  isInitialized, onModelsDetected, onReinitSandbox,
-  skills, onSkillsChange, rules, onRulesChange, ollamaReady
+  workspace,
+  setWorkspace,
+  username,
+  setUsername,
+  password,
+  setPassword,
+  userAlreadyExists,
+  setUserAlreadyExists,
+  llmSettings,
+  setLlmSettings,
+  isInitialized,
+  onModelsDetected,
+  onReinitSandbox,
+  skills,
+  onSkillsChange,
+  rules,
+  onRulesChange,
+  ollamaReady,
+  secretStatus,
+  onSecretStatusChange,
+  recipes,
+  onRecipesChange,
+  mcpServers,
+  onMcpServersChange,
+  accessibility,
+  onAccessibilityChange,
 }: SettingsPageProps) {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [openaiModels, setOpenaiModels] = useState<string[]>([]);
-  const anthropicModels = [
-    "claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"
-  ];
-
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [fetchSuccess, setFetchSuccess] = useState<string | null>(null);
-
+  const [openaiSecret, setOpenaiSecret] = useState("");
+  const [anthropicSecret, setAnthropicSecret] = useState("");
+  const [telegramSecret, setTelegramSecret] = useState("");
+  const [huggingFaceSecret, setHuggingFaceSecret] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [airStatus, setAirStatus] = useState<AirLlmStatus>({
+    running: false,
+    ready: false,
+    detail: "Not checked",
+  });
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editSkillName, setEditSkillName] = useState("");
   const [editSkillDesc, setEditSkillDesc] = useState("");
@@ -42,383 +124,392 @@ export default function SettingsPage({
   const [editSkillIcon, setEditSkillIcon] = useState("");
   const [newRuleText, setNewRuleText] = useState("");
 
-  const fetchOllamaModels = useCallback(async () => {
-    setLoading(true); setFetchError(null); setFetchSuccess(null);
-    try {
-      const endpoint = llmSettings.ollamaEndpoint || "http://localhost:11434";
-      const res = await invoke<string>("fetch_ollama_models", { endpoint });
-      const data = JSON.parse(res);
-      const modelNames: string[] = (data.models || []).map((m: any) => m.name || m.model || '').filter(Boolean);
-      setOllamaModels(modelNames);
-      if (modelNames.length > 0) {
-        if (!llmSettings.ollamaModel || !modelNames.includes(llmSettings.ollamaModel)) setLlmSettings(prev => ({ ...prev, ollamaModel: modelNames[0] }));
-        setFetchSuccess(`Found ${modelNames.length} Ollama model(s)`);
-      } else {
-        setFetchError("Ollama running but no models found. Run: ollama pull <model>");
-      }
-      if (llmSettings.provider === 'ollama') onModelsDetected(modelNames);
-    } catch (err: any) { setFetchError(`Ollama: ${err}. Is Ollama running?`); }
-    setLoading(false);
-  }, [llmSettings.ollamaEndpoint, llmSettings.ollamaModel, llmSettings.provider]);
-
-  const fetchOpenAIModels = useCallback(async () => {
-    if (!llmSettings.openaiKey) { setFetchError("API key required."); return; }
-    setLoading(true); setFetchError(null); setFetchSuccess(null);
-    try {
-      const res = await fetch("https://api.openai.com/v1/models", { headers: { "Authorization": `Bearer ${llmSettings.openaiKey}` } });
-      if (!res.ok) throw new Error(`OpenAI returned ${res.status}`);
-      const data = await res.json();
-      const models: string[] = (data.data || []).map((m: any) => m.id).filter((id: string) => id.startsWith("gpt-") || id.startsWith("o1") || id.startsWith("o3") || id.startsWith("o4")).sort();
-      setOpenaiModels(models);
-      if (models.length > 0) {
-        if (!llmSettings.openaiModel || !models.includes(llmSettings.openaiModel)) setLlmSettings(prev => ({ ...prev, openaiModel: models[0] }));
-        setFetchSuccess(`Found ${models.length} OpenAI model(s)`);
-      }
-      if (llmSettings.provider === 'openai') onModelsDetected(models);
-    } catch (err: any) { setFetchError(`OpenAI: ${err.message}`); }
-    setLoading(false);
-  }, [llmSettings.openaiKey, llmSettings.openaiModel, llmSettings.provider]);
-
-  const handleRefreshModels = async () => {
-    if (llmSettings.provider === 'ollama') await fetchOllamaModels();
-    else if (llmSettings.provider === 'openai') await fetchOpenAIModels();
-    else { onModelsDetected(anthropicModels); setFetchSuccess(`${anthropicModels.length} Anthropic models available`); }
+  const report = (message: string, isError = false) => {
+    setNotice(isError ? "" : message);
+    setError(isError ? message : "");
   };
 
-  // Auto-fetch when Ollama becomes ready
-  useEffect(() => {
-    if (ollamaReady && llmSettings.provider === 'ollama') fetchOllamaModels();
-  }, [ollamaReady]);
+  const fetchOllamaModels = useCallback(async () => {
+    setBusy(true);
+    report("");
+    try {
+      const raw = await invoke<string>("fetch_ollama_models", {
+        endpoint: llmSettings.ollamaEndpoint || "http://127.0.0.1:11434",
+      });
+      const data = JSON.parse(raw);
+      const models = (data.models || [])
+        .map((item: { name?: string; model?: string }) => item.name || item.model || "")
+        .filter(Boolean);
+      setOllamaModels(models);
+      if (models.length && !models.includes(llmSettings.ollamaModel)) {
+        setLlmSettings((current) => ({ ...current, ollamaModel: models[0] }));
+      }
+      report(models.length ? "Found " + models.length + " local model(s)." : "Ollama is running, but no models are installed.", !models.length);
+    } catch (reason) {
+      report("Ollama is unavailable: " + String(reason), true);
+    } finally {
+      setBusy(false);
+    }
+  }, [llmSettings.ollamaEndpoint, llmSettings.ollamaModel, setLlmSettings]);
 
-  useEffect(() => { handleRefreshModels(); }, [llmSettings.provider]);
-  useEffect(() => { if (llmSettings.provider === 'ollama') fetchOllamaModels(); }, [llmSettings.ollamaEndpoint]);
-  useEffect(() => { if (llmSettings.provider === 'openai' && llmSettings.openaiKey) fetchOpenAIModels(); }, [llmSettings.openaiKey]);
   useEffect(() => {
-    if (llmSettings.provider === 'ollama') onModelsDetected(ollamaModels);
-    else if (llmSettings.provider === 'openai') onModelsDetected(openaiModels);
-    else onModelsDetected(anthropicModels);
-  }, [llmSettings.provider, ollamaModels, openaiModels]);
+    if (ollamaReady && llmSettings.provider === "ollama") {
+      fetchOllamaModels();
+    }
+  }, [ollamaReady, llmSettings.provider, fetchOllamaModels]);
 
-  const currentModels = llmSettings.provider === 'ollama' ? ollamaModels : llmSettings.provider === 'openai' ? openaiModels : anthropicModels;
-  const currentModel = llmSettings.provider === 'ollama' ? llmSettings.ollamaModel : llmSettings.provider === 'openai' ? llmSettings.openaiModel : llmSettings.anthropicModel;
-  const setCurrentModel = (model: string) => {
-    if (llmSettings.provider === 'ollama') setLlmSettings(prev => ({ ...prev, ollamaModel: model }));
-    else if (llmSettings.provider === 'openai') setLlmSettings(prev => ({ ...prev, openaiModel: model }));
-    else setLlmSettings(prev => ({ ...prev, anthropicModel: model }));
+  useEffect(() => {
+    if (llmSettings.provider === "ollama") onModelsDetected(ollamaModels);
+    if (llmSettings.provider === "openai") onModelsDetected(llmSettings.openaiModel ? [llmSettings.openaiModel] : []);
+    if (llmSettings.provider === "anthropic") onModelsDetected(llmSettings.anthropicModel ? [llmSettings.anthropicModel] : []);
+    if (llmSettings.provider === "airllm") onModelsDetected(llmSettings.airllmModel ? [llmSettings.airllmModel] : []);
+  }, [
+    llmSettings.provider,
+    llmSettings.openaiModel,
+    llmSettings.anthropicModel,
+    llmSettings.airllmModel,
+    ollamaModels,
+    onModelsDetected,
+  ]);
+
+  const saveSecret = async (name: string, value: string, clear: () => void) => {
+    if (!value.trim()) {
+      report("Enter a value before saving.", true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("set_secret", { name, value });
+      clear();
+      await onSecretStatusChange();
+      report("Secret encrypted with Windows DPAPI.");
+    } catch (reason) {
+      report("Could not save secret: " + String(reason), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteSecret = async (name: string) => {
+    setBusy(true);
+    try {
+      await invoke("delete_secret", { name });
+      await onSecretStatusChange();
+      report("Secret removed.");
+    } catch (reason) {
+      report("Could not remove secret: " + String(reason), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkAirLlm = async () => {
+    setBusy(true);
+    try {
+      const environment = await invoke<string>("check_airllm_environment", {
+        pythonPath: llmSettings.airllmPythonPath,
+      });
+      const status = await invoke<AirLlmStatus>("get_airllm_status", {
+        endpoint: llmSettings.airllmEndpoint,
+      });
+      setAirStatus(status);
+      report("Environment: " + environment + ". Server: " + status.detail);
+    } catch (reason) {
+      report("AirLLM check failed: " + String(reason), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startAirLlm = async () => {
+    setBusy(true);
+    try {
+      const endpoint = new URL(llmSettings.airllmEndpoint);
+      const message = await invoke<string>("start_airllm_server", {
+        pythonPath: llmSettings.airllmPythonPath,
+        model: llmSettings.airllmModel,
+        port: Number(endpoint.port || "11435"),
+        cacheDir: llmSettings.airllmCacheDir || null,
+        compression: llmSettings.airllmCompression,
+      });
+      report(message);
+      setAirStatus(await invoke<AirLlmStatus>("get_airllm_status", {
+        endpoint: llmSettings.airllmEndpoint,
+      }));
+    } catch (reason) {
+      report("AirLLM could not start: " + String(reason), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stopAirLlm = async () => {
+    setBusy(true);
+    try {
+      report(await invoke<string>("stop_airllm_server"));
+      setAirStatus({ running: false, ready: false, detail: "Stopped" });
+    } catch (reason) {
+      report("AirLLM could not stop: " + String(reason), true);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const startEditSkill = (skill: Skill) => {
-    setEditingSkillId(skill.id); setEditSkillName(skill.name); setEditSkillDesc(skill.description);
-    setEditSkillPrompt(skill.systemPrompt); setEditSkillIcon(skill.icon);
+    setEditingSkillId(skill.id);
+    setEditSkillName(skill.name);
+    setEditSkillDesc(skill.description);
+    setEditSkillPrompt(skill.systemPrompt);
+    setEditSkillIcon(skill.icon);
   };
+
   const saveEditSkill = () => {
     if (!editingSkillId || !editSkillName.trim()) return;
-    onSkillsChange(skills.map(s => s.id === editingSkillId ? { ...s, name: editSkillName.trim(), description: editSkillDesc.trim(), systemPrompt: editSkillPrompt.trim(), icon: editSkillIcon || '🔧' } : s));
+    onSkillsChange(
+      skills.map((skill) =>
+        skill.id === editingSkillId
+          ? {
+              ...skill,
+              name: editSkillName.trim(),
+              description: editSkillDesc.trim(),
+              systemPrompt: editSkillPrompt.trim(),
+              icon: editSkillIcon.trim() || "AI",
+            }
+          : skill,
+      ),
+    );
     setEditingSkillId(null);
   };
-  const addCustomSkill = () => {
-    const newSkill: Skill = { id: `skill_${Date.now()}`, name: "New Skill", description: "Describe what this skill does", systemPrompt: "You are a helpful assistant.", icon: "🔧", builtIn: false };
-    onSkillsChange([...skills, newSkill]);
-    startEditSkill(newSkill);
+
+  const addSkill = () => {
+    const skill: Skill = {
+      id: "skill_" + Date.now(),
+      name: "New Skill",
+      description: "Describe this skill",
+      systemPrompt: "You are a helpful assistant.",
+      icon: "AI",
+      builtIn: false,
+    };
+    onSkillsChange([...skills, skill]);
+    startEditSkill(skill);
   };
-  const deleteSkill = (id: string) => onSkillsChange(skills.filter(s => s.id !== id));
-  const addRule = () => { if (!newRuleText.trim()) return; onRulesChange([...rules, { id: `rule_${Date.now()}`, text: newRuleText.trim(), enabled: true }]); setNewRuleText(""); };
-  const toggleRule = (id: string) => onRulesChange(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-  const deleteRule = (id: string) => onRulesChange(rules.filter(r => r.id !== id));
+
+  const addRule = () => {
+    if (!newRuleText.trim()) return;
+    onRulesChange([
+      ...rules,
+      { id: "rule_" + Date.now(), text: newRuleText.trim(), enabled: true },
+    ]);
+    setNewRuleText("");
+  };
+
+  const currentModel =
+    llmSettings.provider === "ollama"
+      ? llmSettings.ollamaModel
+      : llmSettings.provider === "openai"
+        ? llmSettings.openaiModel
+        : llmSettings.provider === "anthropic"
+          ? llmSettings.anthropicModel
+          : llmSettings.airllmModel;
+
+  const setCurrentModel = (model: string) => {
+    if (llmSettings.provider === "ollama") setLlmSettings((value) => ({ ...value, ollamaModel: model }));
+    if (llmSettings.provider === "openai") setLlmSettings((value) => ({ ...value, openaiModel: model }));
+    if (llmSettings.provider === "anthropic") setLlmSettings((value) => ({ ...value, anthropicModel: model }));
+    if (llmSettings.provider === "airllm") setLlmSettings((value) => ({ ...value, airllmModel: model }));
+  };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-10 pb-12 font-sans">
-      
-      <div className="mb-8">
-        <div className="flex items-center space-x-4 mb-3">
-          <div className="w-12 h-12 bg-brutalYellow border-[2px] border-border flex items-center justify-center shadow-brutal">
-            <Settings className="w-7 h-7 text-accentText stroke-[2.5]" />
-          </div>
-          <h1 className="text-4xl font-display font-black uppercase tracking-tighter text-primary">Settings</h1>
-        </div>
-        <div className="h-[2px] bg-border mt-5 w-full"></div>
+    <div className="max-w-4xl mx-auto space-y-10 pb-12 font-sans">
+      <div>
+        <h1 className="text-4xl font-display font-black uppercase tracking-tighter text-primary">Settings</h1>
+        <p className="text-sm text-textMuted font-bold mt-1">Local-first providers, encrypted credentials, and explicit tool permissions.</p>
       </div>
 
-      {/* LLM Config */}
-      <div className="bg-surface border-[2px] border-border p-6 shadow-brutal space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b-[2px] border-border pb-4 gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-primary flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-cream stroke-[2.5]" />
-            </div>
-            <h2 className="text-xl font-display font-black uppercase tracking-tighter text-primary">Provider</h2>
+      {(notice || error) && (
+        <div role="status" className={"border-[2px] border-border px-4 py-3 text-sm font-bold " + (error ? "bg-brutalRed text-cream" : "bg-brutalBlue text-cream")}>
+          {error || notice}
+        </div>
+      )}
+
+      <section className={panelClass}>
+        <div className="flex items-center gap-3 border-b-[2px] border-border pb-4">
+          <div className="w-9 h-9 bg-brutalYellow border-[2px] border-border flex items-center justify-center">
+            <Cpu className="w-5 h-5 text-accentText" />
           </div>
-          <button onClick={handleRefreshModels} disabled={loading}
-            className="flex items-center space-x-2 bg-primary text-cream px-4 py-2.5 border-[2px] border-border font-display font-black uppercase text-xs tracking-widest shadow-brutal-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-brutalBlue transition-colors disabled:opacity-50">
-            <RefreshCw className={`w-4 h-4 stroke-[3] ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
+          <div>
+            <h2 className="text-xl font-display font-black uppercase text-primary">Model Provider</h2>
+            <p className="text-xs text-textMuted">Local inference is the default and does not call a paid API.</p>
+          </div>
         </div>
 
-        {fetchError && <div className="bg-brutalRed text-cream border-[2px] border-border px-4 py-2.5 text-xs font-bold">⚠ {fetchError}</div>}
-        {fetchSuccess && !fetchError && <div className="bg-brutalBlue text-cream border-[2px] border-border px-4 py-2.5 text-xs font-bold">✓ {fetchSuccess}</div>}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">Provider</label>
-            <select value={llmSettings.provider} onChange={(e) => setLlmSettings(prev => ({ ...prev, provider: e.target.value as LLMProvider }))}
-              className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue cursor-pointer appearance-none rounded-none transition-colors">
-              <option value="ollama">Ollama (Local LLMs)</option>
-              <option value="openai">OpenAI API</option>
-              <option value="anthropic">Anthropic API</option>
+            <label className={labelClass}>Provider</label>
+            <select
+              className={fieldClass}
+              value={llmSettings.provider}
+              onChange={(event) => setLlmSettings((value) => ({ ...value, provider: event.target.value as LLMProvider }))}
+            >
+              <option value="ollama">Ollama - recommended local option</option>
+              <option value="airllm">AirLLM - experimental layer streaming</option>
+              <option value="openai">OpenAI API - may cost money</option>
+              <option value="anthropic">Anthropic API - may cost money</option>
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2 flex justify-between">
-              <span>Model</span>
-              <span className="bg-brutalYellow border border-border px-1.5 py-0.5 text-[9px] text-accentText">{currentModels.length} FOUND</span>
+            <label className={labelClass}>Model identifier</label>
+            {llmSettings.provider === "ollama" && ollamaModels.length > 0 ? (
+              <select className={fieldClass} value={currentModel} onChange={(event) => setCurrentModel(event.target.value)}>
+                {ollamaModels.map((model) => <option key={model} value={model}>{model}</option>)}
+              </select>
+            ) : (
+              <input className={fieldClass} value={currentModel} onChange={(event) => setCurrentModel(event.target.value)} placeholder="Enter an exact model ID" />
+            )}
+          </div>
+        </div>
+
+        {llmSettings.provider === "ollama" && (
+          <div className="flex flex-col md:flex-row gap-3">
+            <input className={fieldClass} value={llmSettings.ollamaEndpoint} onChange={(event) => setLlmSettings((value) => ({ ...value, ollamaEndpoint: event.target.value }))} />
+            <button className={buttonClass} onClick={fetchOllamaModels} disabled={busy}>
+              <RefreshCw className={"w-4 h-4 " + (busy ? "animate-spin" : "")} /> Detect
+            </button>
+          </div>
+        )}
+
+        {(llmSettings.provider === "openai" || llmSettings.provider === "anthropic") && (
+          <div className="bg-brutalYellow/30 border-[2px] border-border p-4 space-y-3">
+            <label className="flex items-start gap-3 text-sm font-bold text-primary cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={llmSettings.cloudApiEnabled}
+                onChange={(event) => setLlmSettings((value) => ({ ...value, cloudApiEnabled: event.target.checked }))}
+              />
+              <span>Enable cloud API requests. Sending prompts can consume paid credits. This app never enables it automatically.</span>
             </label>
-            <select value={currentModel} onChange={(e) => setCurrentModel(e.target.value)}
-              className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue cursor-pointer appearance-none rounded-none transition-colors">
-              {currentModels.length === 0 ? <option value="">No models</option> : currentModels.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
           </div>
-        </div>
+        )}
+      </section>
 
-        <div className="pt-4">
-          {llmSettings.provider === 'ollama' && (
-            <div>
-              <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">Endpoint</label>
-              <input type="text" value={llmSettings.ollamaEndpoint} onChange={(e) => setLlmSettings(prev => ({ ...prev, ollamaEndpoint: e.target.value }))}
-                className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none placeholder:text-textMuted" placeholder="http://localhost:11434" />
-            </div>
-          )}
-          {llmSettings.provider === 'openai' && (
-            <div>
-              <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">API Key</label>
-              <div className="relative">
-                <input type={showApiKey ? "text" : "password"} value={llmSettings.openaiKey} onChange={(e) => setLlmSettings(prev => ({ ...prev, openaiKey: e.target.value }))}
-                  className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 pr-10 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none font-mono placeholder:text-textMuted" placeholder="sk-proj-..." />
-                <button type="button" onClick={() => setShowApiKey(!showApiKey)} className="absolute right-2 top-2.5 text-textMuted hover:text-brutalRed transition-colors">
-                  {showApiKey ? <EyeOff className="w-4 h-4 stroke-[2.5]" /> : <Eye className="w-4 h-4 stroke-[2.5]" />}
-                </button>
-              </div>
-            </div>
-          )}
-          {llmSettings.provider === 'anthropic' && (
-            <div>
-              <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">API Key</label>
-              <div className="relative">
-                <input type={showApiKey ? "text" : "password"} value={llmSettings.anthropicKey} onChange={(e) => setLlmSettings(prev => ({ ...prev, anthropicKey: e.target.value }))}
-                  className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 pr-10 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none font-mono placeholder:text-textMuted" placeholder="sk-ant-..." />
-                <button type="button" onClick={() => setShowApiKey(!showApiKey)} className="absolute right-2 top-2.5 text-textMuted hover:text-brutalRed transition-colors">
-                  {showApiKey ? <EyeOff className="w-4 h-4 stroke-[2.5]" /> : <Eye className="w-4 h-4 stroke-[2.5]" />}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <ModelAdvisorPanel llmSettings={llmSettings} setLlmSettings={setLlmSettings} />
 
-      {/* Skills */}
-      <div className="bg-surface border-[2px] border-border p-6 shadow-brutal space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b-[2px] border-border pb-4 gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-brutalYellow flex items-center justify-center border-[2px] border-border">
-              <Sparkles className="w-5 h-5 text-accentText stroke-[2.5]" />
+      {llmSettings.provider === "airllm" && (
+        <section className={panelClass}>
+          <div className="flex items-center justify-between gap-4 border-b-[2px] border-border pb-4">
+            <div>
+              <h2 className="text-xl font-display font-black uppercase text-primary">AirLLM Lab</h2>
+              <p className="text-xs text-textMuted">Experimental. Low VRAM does not mean low total RAM, disk, or latency.</p>
             </div>
-            <h2 className="text-xl font-display font-black uppercase tracking-tighter text-primary">Skills</h2>
+            <span className={"px-3 py-1 border-[2px] border-border text-xs font-black uppercase " + (airStatus.ready ? "bg-brutalBlue text-cream" : "bg-surfaceAlt text-primary")}>
+              {airStatus.ready ? "Ready" : airStatus.running ? "Starting" : "Stopped"}
+            </span>
           </div>
-          <button onClick={addCustomSkill}
-            className="flex items-center space-x-2 bg-primary text-cream px-4 py-2.5 border-[2px] border-border font-display font-black uppercase text-xs tracking-widest shadow-brutal-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-brutalBlue transition-colors">
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Add Skill</span>
-          </button>
-        </div>
+          <div className="bg-brutalYellow/30 border-[2px] border-border p-4 text-xs font-bold text-primary">
+            AirLLM streams model layers to reduce GPU-memory pressure. Large models still need substantial disk space, downloads, CPU/RAM headroom, and can be extremely slow on a 4-8 GB laptop. Start with a small quantized Ollama model first.
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div><label className={labelClass}>Local endpoint</label><input className={fieldClass} value={llmSettings.airllmEndpoint} onChange={(event) => setLlmSettings((value) => ({ ...value, airllmEndpoint: event.target.value }))} /></div>
+            <div><label className={labelClass}>Python executable</label><input className={fieldClass} value={llmSettings.airllmPythonPath} onChange={(event) => setLlmSettings((value) => ({ ...value, airllmPythonPath: event.target.value }))} /></div>
+            <div><label className={labelClass}>Cache directory (optional)</label><input className={fieldClass} value={llmSettings.airllmCacheDir} onChange={(event) => setLlmSettings((value) => ({ ...value, airllmCacheDir: event.target.value }))} /></div>
+            <div><label className={labelClass}>Compression</label><select className={fieldClass} value={llmSettings.airllmCompression} onChange={(event) => setLlmSettings((value) => ({ ...value, airllmCompression: event.target.value as LLMSettings["airllmCompression"] }))}><option value="4bit">4-bit</option><option value="8bit">8-bit</option><option value="none">None</option></select></div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button className={buttonClass} onClick={checkAirLlm} disabled={busy}><RefreshCw className="w-4 h-4" /> Check locally</button>
+            <button className={buttonClass} onClick={startAirLlm} disabled={busy}><Play className="w-4 h-4" /> Start</button>
+            <button className={buttonClass} onClick={stopAirLlm} disabled={busy}><Square className="w-4 h-4" /> Stop</button>
+          </div>
+          <p className="text-xs text-textMuted font-bold">{airStatus.detail}</p>
+        </section>
+      )}
 
+      <KnowledgePanel workspace={workspace} ollamaEndpoint={llmSettings.ollamaEndpoint} />
+
+      <section className={panelClass}>
+        <div className="flex items-center gap-3 border-b-[2px] border-border pb-4">
+          <KeyRound className="w-6 h-6 text-primary" />
+          <div><h2 className="text-xl font-display font-black uppercase text-primary">Encrypted Secrets</h2><p className="text-xs text-textMuted">Values are never shown again or stored in settings JSON.</p></div>
+        </div>
+        {[
+          { label: "OpenAI API key", name: "openai_api_key", configured: secretStatus.openaiConfigured, value: openaiSecret, set: setOpenaiSecret },
+          { label: "Anthropic API key", name: "anthropic_api_key", configured: secretStatus.anthropicConfigured, value: anthropicSecret, set: setAnthropicSecret },
+          { label: "Telegram bot token", name: "telegram_token", configured: secretStatus.telegramConfigured, value: telegramSecret, set: setTelegramSecret },
+          { label: "Hugging Face token", name: "huggingface_token", configured: secretStatus.huggingfaceConfigured, value: huggingFaceSecret, set: setHuggingFaceSecret },
+        ].map((item) => (
+          <div key={item.name} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto_auto] gap-3 items-end bg-surfaceAlt border-[2px] border-border p-3">
+            <div><div className="text-xs font-black uppercase text-primary">{item.label}</div><div className="text-[10px] text-textMuted">{statusLabel(item.configured)}</div></div>
+            <input type="password" autoComplete="off" className={fieldClass} value={item.value} onChange={(event) => item.set(event.target.value)} placeholder={item.configured ? "Enter a replacement" : "Enter secret"} />
+            <button className={buttonClass} disabled={busy || !item.value.trim()} onClick={() => saveSecret(item.name, item.value, () => item.set(""))}><Check className="w-4 h-4" /> Save</button>
+            <button aria-label={"Remove " + item.label} className="p-2.5 border-[2px] border-border bg-surface hover:bg-brutalRed hover:text-cream disabled:opacity-30" disabled={busy || !item.configured} onClick={() => deleteSecret(item.name)}><Trash2 className="w-4 h-4" /></button>
+          </div>
+        ))}
+      </section>
+
+      <section className={panelClass}>
+        <div className="flex items-center gap-3 border-b-[2px] border-border pb-4">
+          <ShieldCheck className="w-6 h-6 text-primary" />
+          <div><h2 className="text-xl font-display font-black uppercase text-primary">Restricted Workspace</h2><p className="text-xs text-textMuted">Defense in depth through a non-admin Windows worker; this is not a VM security boundary.</p></div>
+        </div>
+        <div><label className={labelClass}>Workspace directory</label><input className={fieldClass} value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="M:\AI_Workspace" /></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div><label className={labelClass}>Worker account</label><input className={fieldClass} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="AI_Worker" /></div>
+          <div><label className={labelClass}>Worker password</label><input type="password" autoComplete="new-password" className={fieldClass} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={secretStatus.workerPasswordConfigured ? "Configured - enter to replace" : "Required"} /></div>
+        </div>
+        <label className="flex gap-3 items-center text-sm font-bold text-primary"><input type="checkbox" checked={userAlreadyExists} onChange={(event) => setUserAlreadyExists(event.target.checked)} /> Worker account already exists</label>
+        <button className={buttonClass} onClick={onReinitSandbox} disabled={busy || !workspace.trim() || !username.trim() || (!password.trim() && !secretStatus.workerPasswordConfigured)}>
+          <RotateCcw className="w-4 h-4" /> {isInitialized ? "Re-initialize" : "Initialize"} workspace
+        </button>
+      </section>
+
+      <section className={panelClass}>
+        <div className="flex items-center justify-between gap-3 border-b-[2px] border-border pb-4">
+          <div className="flex items-center gap-3"><Sparkles className="w-6 h-6" /><h2 className="text-xl font-display font-black uppercase text-primary">Skills</h2></div>
+          <button className={buttonClass} onClick={addSkill}><Plus className="w-4 h-4" /> Add</button>
+        </div>
         <div className="space-y-3">
-          {skills.map(skill => (
+          {skills.map((skill) => (
             <div key={skill.id} className="bg-surfaceAlt border-[2px] border-border p-4">
               {editingSkillId === skill.id ? (
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <input type="text" value={editSkillIcon} onChange={e => setEditSkillIcon(e.target.value)} placeholder="🔧"
-                      className="w-10 bg-surface border-[2px] border-border px-1.5 py-1.5 text-center text-base rounded-none focus:outline-none focus:border-brutalBlue" />
-                    <input type="text" value={editSkillName} onChange={e => setEditSkillName(e.target.value)} placeholder="Skill Name"
-                      className="flex-1 bg-surface border-[2px] border-border px-3 py-1.5 text-sm font-bold text-primary rounded-none focus:outline-none focus:border-brutalBlue" />
-                  </div>
-                  <input type="text" value={editSkillDesc} onChange={e => setEditSkillDesc(e.target.value)} placeholder="Short description"
-                    className="w-full bg-surface border-[2px] border-border px-3 py-1.5 text-sm text-primary rounded-none focus:outline-none focus:border-brutalBlue" />
-                  <textarea value={editSkillPrompt} onChange={e => setEditSkillPrompt(e.target.value)} placeholder="System prompt..."
-                    rows={4} className="w-full bg-surface border-[2px] border-border px-3 py-2 text-sm text-primary font-mono rounded-none focus:outline-none focus:border-brutalBlue resize-none custom-scrollbar" />
-                  <div className="flex space-x-2">
-                    <button onClick={saveEditSkill} className="flex items-center space-x-1 bg-brutalBlue text-cream px-3 py-1.5 border-[2px] border-border font-display font-black uppercase text-[10px]">
-                      <Check className="w-3.5 h-3.5 stroke-[3]" /><span>Save</span>
-                    </button>
-                    <button onClick={() => setEditingSkillId(null)} className="flex items-center space-x-1 bg-surfaceAlt text-primary px-3 py-1.5 border-[2px] border-border font-display font-black uppercase text-[10px]">
-                      <X className="w-3.5 h-3.5 stroke-[3]" /><span>Cancel</span>
-                    </button>
-                  </div>
+                  <div className="grid grid-cols-[70px_1fr] gap-3"><input className={fieldClass} value={editSkillIcon} onChange={(event) => setEditSkillIcon(event.target.value)} /><input className={fieldClass} value={editSkillName} onChange={(event) => setEditSkillName(event.target.value)} /></div>
+                  <input className={fieldClass} value={editSkillDesc} onChange={(event) => setEditSkillDesc(event.target.value)} />
+                  <textarea rows={5} className={fieldClass} value={editSkillPrompt} onChange={(event) => setEditSkillPrompt(event.target.value)} />
+                  <div className="flex gap-2"><button className={buttonClass} onClick={saveEditSkill}><Check className="w-4 h-4" /> Save</button><button className={buttonClass} onClick={() => setEditingSkillId(null)}><X className="w-4 h-4" /> Cancel</button></div>
                 </div>
               ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-lg">{skill.icon}</span>
-                    <div>
-                      <div className="text-sm font-display font-black uppercase text-primary">{skill.name}</div>
-                      <div className="text-[10px] text-textMuted">{skill.description}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    {skill.builtIn && <span className="text-[8px] font-display font-black uppercase text-textMuted bg-surface border border-border px-1.5 py-0.5">Built-in</span>}
-                    <button onClick={() => startEditSkill(skill)} className="w-7 h-7 bg-surface text-textMuted border border-border flex items-center justify-center hover:bg-brutalYellow hover:text-accentText transition-colors">
-                      <Pencil className="w-3 h-3 stroke-[2.5]" />
-                    </button>
-                    {!skill.builtIn && (
-                      <button onClick={() => deleteSkill(skill.id)} className="w-7 h-7 bg-surface text-textMuted border border-border flex items-center justify-center hover:bg-brutalRed hover:text-cream transition-colors">
-                        <Trash2 className="w-3 h-3 stroke-[2.5]" />
-                      </button>
-                    )}
-                  </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex gap-3 items-center"><span className="font-black text-xs border border-border px-2 py-1 bg-surface">{skill.icon}</span><div><div className="text-sm font-black uppercase text-primary">{skill.name}</div><div className="text-xs text-textMuted">{skill.description}</div></div></div>
+                  <div className="flex gap-2"><button aria-label={"Edit " + skill.name} className="p-2 border border-border bg-surface" onClick={() => startEditSkill(skill)}><Pencil className="w-4 h-4" /></button>{!skill.builtIn && <button aria-label={"Delete " + skill.name} className="p-2 border border-border bg-surface hover:bg-brutalRed hover:text-cream" onClick={() => onSkillsChange(skills.filter((item) => item.id !== skill.id))}><Trash2 className="w-4 h-4" /></button>}</div>
                 </div>
               )}
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-        {/* Telegram Integration */}
-        <div className="space-y-4">
-          <div className="border-b-[2px] border-border pb-2">
-            <h2 className="text-sm font-display font-black uppercase tracking-widest text-primary flex items-center space-x-2">
-              <span className="w-2 h-2 bg-brutalBlue inline-block"></span>
-              <span>Telegram Bot Integration</span>
-            </h2>
-            <p className="text-xs text-textMuted mt-1">Chat with Antigravity from your phone.</p>
-          </div>
-          
-          <div className="space-y-1">
-            <label className="text-[10px] font-display font-black uppercase tracking-widest text-textMuted">Bot Token</label>
-            <input 
-              type="password" 
-              value={llmSettings.telegramToken || ''} 
-              onChange={e => setLlmSettings({...llmSettings, telegramToken: e.target.value})}
-              className="w-full bg-surfaceAlt text-primary px-3 py-2 border-[2px] border-border focus:outline-none focus:border-brutalYellow font-mono text-xs placeholder:text-textMuted/50 transition-colors"
-              placeholder="e.g. 123456789:ABCdefGHIjklMNO..."
-            />
-            <p className="text-[10px] text-textMuted mt-1">Get this from @BotFather on Telegram.</p>
-          </div>
-        </div>
-
-        {/* Global Agent Rules */}
-      <div className="bg-surface border-[2px] border-border p-6 shadow-brutal space-y-6">
-        <div className="flex items-center space-x-3 border-b-[2px] border-border pb-4">
-          <div className="w-9 h-9 bg-primary flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-cream stroke-[2.5]" />
-          </div>
-          <h2 className="text-xl font-display font-black uppercase tracking-tighter text-primary">Rules</h2>
-        </div>
-
-        <div className="flex space-x-2">
-          <input type="text" value={newRuleText} onChange={e => setNewRuleText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addRule()}
-            placeholder="e.g., Always use TypeScript strict mode"
-            className="flex-1 bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none placeholder:text-textMuted" />
-          <button onClick={addRule} disabled={!newRuleText.trim()}
-            className="px-4 py-2.5 bg-primary text-cream border-[2px] border-border font-display font-black uppercase text-[10px] hover:bg-brutalBlue transition-colors disabled:opacity-30">
-            Add
-          </button>
-        </div>
-
+      <section className={panelClass}>
+        <div className="flex items-center gap-3 border-b-[2px] border-border pb-4"><BookOpen className="w-6 h-6" /><h2 className="text-xl font-display font-black uppercase text-primary">Global Rules</h2></div>
+        <div className="flex gap-3"><input className={fieldClass} value={newRuleText} onChange={(event) => setNewRuleText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addRule(); }} placeholder="A rule injected into every conversation" /><button className={buttonClass} onClick={addRule} disabled={!newRuleText.trim()}><Plus className="w-4 h-4" /> Add</button></div>
         <div className="space-y-2">
-          <span className="text-[10px] font-display font-black uppercase tracking-widest text-textMuted">Suggested Presets:</span>
-          <div className="flex flex-wrap gap-2">
-            {[
-              "Explain concepts simply, like I'm 5 years old",
-              "Be extremely concise, do not yap",
-              "Always format code in TypeScript",
-              "Actively ask for permission before modifying files"
-            ].map(preset => (
-              <button key={preset} 
-                onClick={() => onRulesChange([...rules, { id: `rule_${Date.now()}_${Math.random()}`, text: preset, enabled: true }])}
-                className="bg-surfaceAlt text-primary text-[10px] font-bold px-2 py-1 border border-border hover:bg-brutalYellow hover:text-accentText transition-colors text-left">
-                + {preset}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {rules.length === 0 ? (
-          <div className="text-xs font-bold text-textMuted italic p-3 border-[2px] border-border border-dashed bg-surfaceAlt">
-            No rules defined. Rules inject into every conversation.
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {rules.map(rule => (
-              <div key={rule.id} className="flex items-center space-x-3 bg-surfaceAlt border border-border p-2.5">
-                <input type="checkbox" checked={rule.enabled} onChange={() => toggleRule(rule.id)}
-                  className="w-4 h-4 border-[2px] border-border appearance-none checked:bg-brutalYellow cursor-pointer rounded-none shrink-0 relative after:content-[''] after:absolute after:hidden checked:after:block after:left-[3px] after:top-[0px] after:w-1.5 after:h-2.5 after:border-solid after:border-accentText after:border-r-[2px] after:border-b-[2px] after:rotate-45" />
-                <span className={`flex-1 text-xs font-bold ${rule.enabled ? 'text-primary' : 'text-textMuted line-through'}`}>{rule.text}</span>
-                <button onClick={() => deleteRule(rule.id)} className="w-6 h-6 text-textMuted flex items-center justify-center hover:text-brutalRed transition-colors shrink-0">
-                  <Trash2 className="w-3 h-3 stroke-[2]" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Sandbox Config */}
-      <div className="bg-surface border-[2px] border-border p-6 shadow-brutal space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b-[2px] border-border pb-4 gap-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-primary flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-cream stroke-[2.5]" />
+          {rules.length === 0 && <p className="text-xs text-textMuted font-bold">No global rules.</p>}
+          {rules.map((rule) => (
+            <div key={rule.id} className="flex gap-3 items-center bg-surfaceAlt border border-border p-3">
+              <input type="checkbox" checked={rule.enabled} onChange={() => onRulesChange(rules.map((item) => item.id === rule.id ? { ...item, enabled: !item.enabled } : item))} />
+              <span className={"flex-1 text-xs font-bold " + (rule.enabled ? "text-primary" : "text-textMuted line-through")}>{rule.text}</span>
+              <button aria-label="Delete rule" onClick={() => onRulesChange(rules.filter((item) => item.id !== rule.id))}><Trash2 className="w-4 h-4" /></button>
             </div>
-            <h2 className="text-xl font-display font-black uppercase tracking-tighter text-primary">Sandbox</h2>
-          </div>
-          {isInitialized && (
-            <span className="text-[10px] font-display font-black uppercase tracking-widest text-accentText bg-brutalYellow border-[2px] border-border px-3 py-1.5 flex items-center space-x-2">
-              <div className="w-2 h-2 bg-brutalRed animate-pulse"></div>
-              <span>Active</span>
-            </span>
-          )}
+          ))}
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="col-span-1 md:col-span-2">
-            <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">
-              Workspaces <span className="lowercase font-sans text-[9px]">(comma separated)</span>
-            </label>
-            <input type="text" value={workspace} onChange={e => setWorkspace(e.target.value)} placeholder="M:\AI_Workspace"
-              className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none placeholder:text-textMuted" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">Worker Account</label>
-            <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="AI_Worker"
-              className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none placeholder:text-textMuted" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-display font-black uppercase tracking-widest text-textMuted mb-2">Password</label>
-            <div className="relative">
-              <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-                className="w-full bg-surfaceAlt border-[2px] border-border px-3 py-2.5 pr-10 text-sm font-bold text-primary focus:outline-none focus:border-brutalBlue transition-colors rounded-none placeholder:text-textMuted" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2.5 text-textMuted hover:text-brutalRed transition-colors">
-                {showPassword ? <EyeOff className="w-4 h-4 stroke-[2.5]" /> : <Eye className="w-4 h-4 stroke-[2.5]" />}
-              </button>
-            </div>
-          </div>
-        </div>
+      <RecipesPanel recipes={recipes} onChange={onRecipesChange} />
+      <McpPanel servers={mcpServers} onChange={onMcpServersChange} />
+      <PortableDataPanel workspace={workspace} />
+      <UpdaterPanel />
+      <AccessibilityPanel value={accessibility} onChange={onAccessibilityChange} />
+      <ActivityLedger />
 
-        <div className="flex items-center space-x-3 pt-3">
-          <input type="checkbox" id="userExistsSettings" checked={userAlreadyExists} onChange={e => setUserAlreadyExists(e.target.checked)}
-            className="w-4 h-4 border-[2px] border-border appearance-none checked:bg-brutalYellow cursor-pointer rounded-none relative after:content-[''] after:absolute after:hidden checked:after:block after:left-[3px] after:top-[0px] after:w-1.5 after:h-2.5 after:border-solid after:border-accentText after:border-r-[2px] after:border-b-[2px] after:rotate-45" />
-          <label htmlFor="userExistsSettings" className="text-xs font-bold text-primary cursor-pointer">Account already exists on Windows</label>
-        </div>
-
-        {isInitialized && (
-          <button onClick={onReinitSandbox}
-            className="flex items-center space-x-2 bg-brutalYellow text-accentText border-[2px] border-border px-5 py-2.5 font-display font-black uppercase text-xs tracking-widest shadow-brutal-sm active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-primary hover:text-cream transition-colors">
-            <RotateCcw className="w-4 h-4 stroke-[3]" />
-            <span>Re-Initialize Sandbox</span>
-          </button>
-        )}
-      </div>
     </div>
   );
 }

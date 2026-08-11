@@ -15,21 +15,28 @@
   --code-text: #1a1a1a;
   --scrollbar-thumb: #1a1a1a;
   --scrollbar-hover: #333333;
+  --accent-red: #e63b2e;
+  --accent-blue: #2d7ff9;
+  --accent-yellow: #ffcc00;
 }
 
 .dark {
-  --bg-color: #111111;
-  --text-color: #e8e3db;
-  --border-color: #555555;
-  --shadow-color: #444444;
-  --surface-color: #1c1c1c;
-  --surface-alt: #2c2c2c;
-  --text-muted: #8a8a8a;
-  --accent-text: #111111;
-  --code-bg: #1e1e1e;
-  --code-text: #d4d0c8;
-  --scrollbar-thumb: #555555;
-  --scrollbar-hover: #777777;
+  color-scheme: dark;
+  --bg-color: #12120f;
+  --text-color: #f1eadc;
+  --border-color: #746c5a;
+  --shadow-color: #050504;
+  --surface-color: #1d1c17;
+  --surface-alt: #2a2821;
+  --text-muted: #c0b7a4;
+  --accent-text: #17130b;
+  --code-bg: #0d0d0b;
+  --code-text: #f3ead7;
+  --scrollbar-thumb: #6b6454;
+  --scrollbar-hover: #918674;
+  --accent-red: #ff7466;
+  --accent-blue: #7dafff;
+  --accent-yellow: #d9a441;
 }
 
 @theme {
@@ -40,9 +47,9 @@
   --color-surfaceAlt: var(--surface-alt);
   --color-textMuted: var(--text-muted);
   --color-accentText: var(--accent-text);
-  --color-brutalRed: #e63b2e;
-  --color-brutalBlue: #2d7ff9;
-  --color-brutalYellow: #ffcc00;
+  --color-brutalRed: var(--accent-red);
+  --color-brutalBlue: var(--accent-blue);
+  --color-brutalYellow: var(--accent-yellow);
 
   --shadow-brutal: 6px 6px 0px 0px var(--shadow-color);
   --shadow-brutal-sm: 4px 4px 0px 0px var(--shadow-color);
@@ -60,6 +67,30 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+::selection {
+  background: var(--accent-yellow);
+  color: var(--accent-text);
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 #root {
@@ -134,4 +165,40 @@ body {
 select option {
   background-color: var(--surface-color);
   color: var(--text-color);
+}
+/* Accessibility modes are applied to the root element from local settings. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+.high-contrast {
+  --bg-color: #ffffff;
+  --text-color: #000000;
+  --border-color: #000000;
+  --shadow-color: #000000;
+  --surface-color: #ffffff;
+  --surface-alt: #eeeeee;
+  --text-muted: #333333;
+  --accent-red: #b00020;
+  --accent-blue: #005fcc;
+  --accent-yellow: #ffd600;
+}
+
+.dark.high-contrast {
+  --bg-color: #000000;
+  --text-color: #ffffff;
+  --border-color: #ffffff;
+  --shadow-color: #000000;
+  --surface-color: #080808;
+  --surface-alt: #171717;
+  --text-muted: #d7d7d7;
+  --accent-red: #ff7070;
+  --accent-blue: #70b7ff;
+  --accent-yellow: #ffd84a;
+  --accent-text: #000000;
 }
