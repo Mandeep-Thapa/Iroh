@@ -34,15 +34,44 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Verify frontend
+        run: npm run build
+
+      - name: Verify Rust backend
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Configure signed updater
+        shell: pwsh
+        env:
+          IROH_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:IROH_UPDATER_PUBLIC_KEY)) {
+            throw "Add the TAURI_UPDATER_PUBLIC_KEY repository secret before releasing."
+          }
+          $irohUpdaterConfig = @{
+            bundle = @{ createUpdaterArtifacts = $true }
+            plugins = @{
+              updater = @{
+                pubkey = $env:IROH_UPDATER_PUBLIC_KEY
+                endpoints = @("https://github.com/Mandeep-Thapa/Iroh/releases/latest/download/latest.json")
+                windows = @{ installMode = "passive" }
+              }
+            }
+          } | ConvertTo-Json -Depth 8 -Compress
+          "TAURI_CONFIG=$irohUpdaterConfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
 
       - name: Build Tauri Desktop Application
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: 'AI Sandbox Desktop v__VERSION__'
-          releaseBody: 'Automated release build of AI Sandbox Desktop app for Windows.'
+          releaseName: 'Iroh v__VERSION__'
+          releaseBody: 'Verified Windows build of Iroh.'
           releaseDraft: false
           prerelease: false

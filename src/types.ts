@@ -1,15 +1,74 @@
-export type LLMProvider = 'ollama' | 'openai' | 'anthropic';
+export type LLMProvider = "ollama" | "openai" | "anthropic" | "airllm";
 
 export interface LLMSettings {
   provider: LLMProvider;
   ollamaEndpoint: string;
   ollamaModel: string;
-  openaiKey: string;
   openaiModel: string;
-  anthropicKey: string;
   anthropicModel: string;
-  telegramToken?: string;
+  airllmEndpoint: string;
+  airllmModel: string;
+  airllmPythonPath: string;
+  airllmCacheDir: string;
+  airllmCompression: "none" | "4bit" | "8bit";
+  cloudApiEnabled: boolean;
+  telegramEnabled: boolean;
+  telegramChatId: string;
   contextLength?: number;
+  benchmarkHistory?: BenchmarkResult[];
+}
+
+export interface BenchmarkResult {
+  id: string;
+  provider: LLMProvider;
+  model: string;
+  contextLength: number;
+  durationMs: number;
+  outputChars: number;
+  createdAt: number;
+}
+
+export interface McpToolSummary {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface McpServerProfile {
+  id: string;
+  name: string;
+  endpoint: string;
+  enabled: boolean;
+  tools: McpToolSummary[];
+  status: string;
+}
+
+export interface TaskRecipe {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  builtIn: boolean;
+}
+
+export interface AccessibilitySettings {
+  uiScale: number;
+  reducedMotion: boolean;
+  highContrast: boolean;
+}
+
+export interface SecretStatus {
+  openaiConfigured: boolean;
+  anthropicConfigured: boolean;
+  telegramConfigured: boolean;
+  workerPasswordConfigured: boolean;
+  huggingfaceConfigured: boolean;
+}
+
+export interface AirLlmStatus {
+  running: boolean;
+  ready: boolean;
+  detail: string;
 }
 
 export interface SystemStats {
@@ -22,7 +81,7 @@ export interface SystemStats {
 export interface TaskStep {
   id: string;
   title: string;
-  status: 'pending' | 'running' | 'completed' | 'blocked' | 'failed';
+  status: "pending" | "running" | "completed" | "blocked" | "failed";
   details?: string;
 }
 

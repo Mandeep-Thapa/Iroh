@@ -1,9 +1,9 @@
-use sysinfo::System;
-use serde::{Serialize, Deserialize};
-use std::fs::OpenOptions;
+use serde::{Deserialize, Serialize};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::command;
+use sysinfo::System;
+use tauri::{AppHandle, Manager};
 
 #[derive(Serialize, Deserialize)]
 pub struct ProcessTelemetry {
@@ -14,65 +14,72 @@ pub struct ProcessTelemetry {
 #[derive(Serialize, Deserialize)]
 pub struct TelemetryLog {
     pub timestamp: u64,
-    pub command_executed: Option<String>,
-    pub spawn_latency_ms: Option<u128>,
+    pub action_category: Option<String>,
+    pub spawn_latency_ms: Option<u64>,
     pub sandbox_process: Option<ProcessTelemetry>,
     pub host_app: ProcessTelemetry,
 }
 
-#[command]
+#[tauri::command]
 pub fn log_telemetry(
-    workspace: &str,
-    command_executed: Option<String>,
+    app: AppHandle,
+    action_category: Option<String>,
     spawn_latency_ms: Option<u64>,
     sandbox_pid: Option<u32>,
 ) -> Result<(), String> {
-    let mut sys = System::new_all();
-    sys.refresh_all();
-    
-    // Get host process telemetry (Tauri app itself)
+    let mut system = System::new_all();
+    system.refresh_all();
+
     let host_pid = std::process::id();
-    let host_app = get_process_telemetry(&sys, (host_pid as usize).into())
-        .unwrap_or(ProcessTelemetry { cpu_usage: 0.0, memory_mb: 0.0 });
-    
-    let sandbox_process = if let Some(pid) = sandbox_pid {
-        get_process_telemetry(&sys, (pid as usize).into())
-    } else {
-        None
-    };
-    
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    
-    let log_entry = TelemetryLog {
-        timestamp,
-        command_executed,
-        spawn_latency_ms: spawn_latency_ms.map(|v| v as u128),
-        sandbox_process,
-        host_app,
-    };
-    
-    let log_path = format!("{}\\telemetry_logs.json", workspace);
+    let host_app =
+        process_telemetry(&system, (host_pid as usize).into()).unwrap_or(ProcessTelemetry {
+            cpu_usage: 0.0,
+            memory_mb: 0.0,
+        });
+    let sandbox_process =
+        sandbox_pid.and_then(|pid| process_telemetry(&system, (pid as usize).into()));
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_secs();
+    let safe_category = action_category.map(|value| {
+        value
+            .chars()
+            .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+            .take(64)
+            .collect()
+    });
+
+    let directory = app
+        .path()
+        .app_log_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log_path)
-        .map_err(|e| e.to_string())?;
-        
-    let json = serde_json::to_string(&log_entry).map_err(|e| e.to_string())?;
-    writeln!(file, "{}", json).map_err(|e| e.to_string())?;
-    
-    Ok(())
+        .open(directory.join("telemetry.jsonl"))
+        .map_err(|error| error.to_string())?;
+    writeln!(
+        file,
+        "{}",
+        serde_json::to_string(&TelemetryLog {
+            timestamp,
+            action_category: safe_category,
+            spawn_latency_ms,
+            sandbox_process,
+            host_app,
+        })
+        .map_err(|error| error.to_string())?
+    )
+    .map_err(|error| error.to_string())
 }
 
-fn get_process_telemetry(sys: &System, pid: sysinfo::Pid) -> Option<ProcessTelemetry> {
-    if let Some(process) = sys.process(pid) {
-        Some(ProcessTelemetry {
-            cpu_usage: process.cpu_usage(),
-            memory_mb: process.memory() as f64 / 1024.0 / 1024.0,
-        })
-    } else {
-        None
-    }
+fn process_telemetry(system: &System, pid: sysinfo::Pid) -> Option<ProcessTelemetry> {
+    system.process(pid).map(|process| ProcessTelemetry {
+        cpu_usage: process.cpu_usage(),
+        memory_mb: process.memory() as f64 / 1024.0 / 1024.0,
+    })
 }
 
 #[derive(Serialize)]
@@ -83,34 +90,32 @@ pub struct SystemStats {
     pub vram_total_mb: f64,
 }
 
-#[command]
+#[tauri::command]
 pub async fn get_system_stats() -> Result<SystemStats, String> {
-    let mut sys = System::new();
-    sys.refresh_memory();
-    
-    let ram_total_mb = sys.total_memory() as f64 / 1024.0 / 1024.0;
-    let ram_used_mb = sys.used_memory() as f64 / 1024.0 / 1024.0;
-    
+    let mut system = System::new();
+    system.refresh_memory();
+
     let mut vram_used_mb = 0.0;
     let mut vram_total_mb = 0.0;
-    
-    // Try to get nvidia GPU stats
     if let Ok(output) = std::process::Command::new("nvidia-smi")
-        .args(&["--query-gpu=memory.total,memory.used", "--format=csv,noheader,nounits"])
-        .output() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(line) = stdout.lines().next() {
-            let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+        .args([
+            "--query-gpu=memory.total,memory.used",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+    {
+        if let Some(line) = String::from_utf8_lossy(&output.stdout).lines().next() {
+            let parts: Vec<&str> = line.split(',').map(str::trim).collect();
             if parts.len() == 2 {
                 vram_total_mb = parts[0].parse().unwrap_or(0.0);
                 vram_used_mb = parts[1].parse().unwrap_or(0.0);
             }
         }
     }
-    
+
     Ok(SystemStats {
-        ram_used_mb,
-        ram_total_mb,
+        ram_used_mb: system.used_memory() as f64 / 1024.0 / 1024.0,
+        ram_total_mb: system.total_memory() as f64 / 1024.0 / 1024.0,
         vram_used_mb,
         vram_total_mb,
     })

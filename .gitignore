@@ -32,3 +32,8 @@ lerna-debug.log*
 *.sln
 *.sw?
 Thumbs.db
+
+# Optional Python / AirLLM environment
+__pycache__/
+*.py[cod]
+.venv-airllm/

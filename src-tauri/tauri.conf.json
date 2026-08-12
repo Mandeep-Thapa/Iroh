@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "Iroh",
   "version": "0.1.0",
   "identifier": "com.sandbox.desktop",
   "build": {
@@ -12,18 +12,21 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "Iroh",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1080,
+        "minHeight": 680
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": { "../scripts/airllm_server.py": "scripts/airllm_server.py" },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
